@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using TMPro;
+using DG.Tweening; // Added DOTween
 
 public class GameManager : MonoBehaviour
 {
@@ -27,11 +28,9 @@ public class GameManager : MonoBehaviour
     public float obstacleSpawnInterval = 2f;
     public float obstacleSpeed = 2f;
 
-   
     public enum GameState { Home, Playing, GameOver }
     public GameState currentState = GameState.Home;
 
-    
     public float timer = 0;
     public bool isGameOver = false;
     public int currentScore = 0;
@@ -48,14 +47,11 @@ public class GameManager : MonoBehaviour
 
     public void Start()
     {
-        
         bestScore = PlayerPrefs.GetInt("BestScore", 0);
 
-        
         SetGameState(GameState.Home);
         Time.timeScale = 1f;
 
-        
         if (playButton != null)
             playButton.onClick.AddListener(StartGame);
         if (retryButton != null)
@@ -64,13 +60,11 @@ public class GameManager : MonoBehaviour
 
     private void Update()
     {
-        
         if (currentState == GameState.Playing)
         {
             HandleObstacleSpawning();
         }
 
-        
         if (currentState == GameState.Home && Input.GetKeyDown(KeyCode.Mouse0))
         {
             StartGame();
@@ -81,8 +75,13 @@ public class GameManager : MonoBehaviour
     {
         if (timer <= 0f)
         {
-            GameObject obstacle = Instantiate(obstaclePrefab, new Vector3(5f, Random.Range(-3f, 0f), 0f), Quaternion.identity);
-            Destroy(obstacle, 8f);
+            GameObject obstacle = Instantiate(obstaclePrefab, new Vector3(10f, Random.Range(-3f, 0f), 0f), Quaternion.identity);
+            
+            // Juice: Scale up obstacle smoothly on spawn
+            obstacle.transform.localScale = Vector3.zero;
+            obstacle.transform.DOScale(Vector3.one, 0.3f).SetEase(Ease.OutBack);
+
+            Destroy(obstacle, 30f);
             timer = obstacleSpawnInterval;
         }
         else
@@ -95,7 +94,6 @@ public class GameManager : MonoBehaviour
     {
         currentState = newState;
 
-       
         homePanel.SetActive(false);
         gamePanel.SetActive(false);
         gameOverPanel.SetActive(false);
@@ -104,6 +102,7 @@ public class GameManager : MonoBehaviour
         {
             case GameState.Home:
                 homePanel.SetActive(true);
+                AnimatePanelPopIn(homePanel);
                 isGameOver = false;
                 playerController.EnableInput(false);
                 
@@ -126,32 +125,35 @@ public class GameManager : MonoBehaviour
 
             case GameState.GameOver:
                 gameOverPanel.SetActive(true);
+                AnimatePanelPopIn(gameOverPanel);
                 isGameOver = true;
                 playerController.EnableInput(false);
                
                 if (player != null)
                     player.SetActive(true);
-                Time.timeScale = 0f;
+                
                 UpdateGameOverUI();
+                Time.timeScale = 0f; // Set scale after animations update
                 break;
         }
     }
 
+    private void AnimatePanelPopIn(GameObject panel)
+    {
+        panel.transform.DOKill();
+        panel.transform.localScale = Vector3.one * 0.7f;
+        panel.transform.DOScale(Vector3.one, 0.35f).SetEase(Ease.OutBack).SetUpdate(true);
+    }
+
     public void StartGame()
     {
-        
         ClearObstacles();
-
-        
         ResetPlayer();
-
-        
         SetGameState(GameState.Playing);
     }
 
     public void GameOver()
     {
-        
         if (currentScore > bestScore)
         {
             bestScore = currentScore;
@@ -174,7 +176,14 @@ public class GameManager : MonoBehaviour
     private void UpdateScoreUI()
     {
         if (scoreText != null)
+        {
             scoreText.text = currentScore.ToString();
+
+            // Juice: Score bump text animation
+            scoreText.transform.DOKill(true);
+            scoreText.transform.localScale = Vector3.one;
+            scoreText.transform.DOPunchScale(Vector3.one * 0.4f, 0.2f, 8, 1f);
+        }
     }
 
     private void UpdateGameOverUI()
@@ -198,11 +207,14 @@ public class GameManager : MonoBehaviour
     {
         if (player != null)
         {
+            player.transform.DOKill();
+            player.transform.rotation = Quaternion.identity;
             player.transform.position = new Vector3(-2f, 0f, 0f);
+            
             Rigidbody2D playerRb = player.GetComponent<Rigidbody2D>();
             if (playerRb != null)
             {
-                playerRb.velocity = Vector2.zero;
+                playerRb.linearVelocity = Vector2.zero;
                 playerRb.angularVelocity = 0f;
             }
         }

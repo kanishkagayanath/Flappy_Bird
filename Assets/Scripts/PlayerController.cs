@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using DG.Tweening; // Added DOTween
 
 public class PlayerController : MonoBehaviour
 {
@@ -11,10 +12,12 @@ public class PlayerController : MonoBehaviour
 
     private Rigidbody2D rb;
     private bool inputEnabled = false;
+    private Vector3 initialScale;
 
     private void Start()
     {
         rb = GetComponent<Rigidbody2D>();
+        initialScale = transform.localScale;
     }
 
     void Update()
@@ -24,15 +27,18 @@ public class PlayerController : MonoBehaviour
             Jump();
         }
 
-        
         HandleRotation();
     }
 
     private void Jump()
     {
-        rb.velocity = Vector2.up * force;
+        rb.linearVelocity = Vector2.up * force;
 
-       
+        // Juice: Squash and Stretch animation on jump
+        transform.DOKill(true);
+        transform.localScale = initialScale;
+        transform.DOPunchScale(new Vector3(-0.25f, 0.35f, 0f), 0.15f, 10, 1f);
+
         if (SoundManager.instance != null && SoundManager.instance.PlayerFly != null)
         {
             GameObject soundObj = Instantiate(SoundManager.instance.PlayerFly);
@@ -44,18 +50,18 @@ public class PlayerController : MonoBehaviour
     {
         if (rb != null)
         {
-           
-            float rotation = 0f;
-            if (rb.velocity.y > 0)
+            float targetZ = 0f;
+            if (rb.linearVelocity.y > 0)
             {
-                rotation = maxRotation;
+                targetZ = maxRotation;
             }
-            else if (rb.velocity.y < -2)
+            else if (rb.linearVelocity.y < -2)
             {
-                rotation = -maxRotation;
+                targetZ = -maxRotation;
             }
 
-            transform.rotation = Quaternion.Lerp(transform.rotation, Quaternion.Euler(0, 0, rotation), rotationSpeed * Time.deltaTime);
+            // Juice: Smooth tilt rotation tween
+            transform.DORotate(new Vector3(0, 0, targetZ), 0.15f).SetEase(Ease.OutQuad);
         }
     }
 
@@ -68,31 +74,54 @@ public class PlayerController : MonoBehaviour
     {
         if (collision.gameObject.CompareTag("Obstacle") || collision.gameObject.CompareTag("Ground"))
         {
-            
+            // Juice: Camera shake on crash
+            if (Camera.main != null)
+            {
+                Camera.main.DOShakePosition(0.35f, 0.4f, 25, 90f).SetUpdate(true);
+            }
+
             if (SoundManager.instance != null && SoundManager.instance.gameoversound != null)
             {
                 GameObject soundObj = Instantiate(SoundManager.instance.gameoversound);
                 Destroy(soundObj, 2f);
             }
 
-            
             GameManager.instance.GameOver();
         }
     }
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        
         if (other.CompareTag("ScoreTrigger"))
         {
             GameManager.instance.AddScore();
 
-           
             if (SoundManager.instance != null && SoundManager.instance.scoreSound != null)
             {
                 GameObject soundObj = Instantiate(SoundManager.instance.scoreSound);
                 Destroy(soundObj, 2f);
             }
+        }
+        else if (other.CompareTag("Coin"))
+        {
+            // Call the DOTween collect animation on the coin
+            Coin coin = other.GetComponent<Coin>();
+            if (coin != null)
+            {
+                coin.Collect();
+            }
+
+            // Add extra points for coins (e.g., +2 points) or track a separate coin currency
+            GameManager.instance.currentScore += 2; 
+            
+            // Re-use your UpdateScoreUI logic here (you may need to make UpdateScoreUI public in GameManager)
+            if (GameManager.instance.scoreText != null)
+            {
+                GameManager.instance.scoreText.text = GameManager.instance.currentScore.ToString();
+                GameManager.instance.scoreText.transform.DOPunchScale(Vector3.one * 0.4f, 0.2f, 8, 1f);
+            }
+
+            // Optional: Add a specific coin pickup sound here
         }
     }
 }
